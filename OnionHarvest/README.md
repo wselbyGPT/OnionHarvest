@@ -1,35 +1,24 @@
 # OnionHarvest
 
-This repository is currently a scaffold (most source files are present but empty), so there is not yet a working command-line interface to run.
+Minimal "happy path" pipeline for v0.0.0:
 
-## Use from WSL Ubuntu CLI
+1. Bootstrap local Tor SOCKS endpoint (`127.0.0.1:9050`)
+2. Fetch one URL over Tor
+3. Extract structured fields from HTML (`title`, `description`, `links_count`, `text_preview`)
+4. Store one local artifact as JSON (default) or SQLite
 
-From your WSL Ubuntu shell:
+## Run
 
 ```bash
 cd /workspace/OnionHarvest/OnionHarvest
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
+python -m onionharvest.cli "http://example.onion" --out artifacts/harvest.json --format json
 ```
 
-At this point, there are two ways to run code while developing:
+If Tor is unavailable, the command returns a clear error message.
 
-1. Run a module directly:
-
-```bash
-python -m onionharvest.cli
-```
-
-2. Run tests:
+## Test
 
 ```bash
+cd /workspace/OnionHarvest/OnionHarvest
 pytest -q
 ```
-
-## Current status
-
-- `pyproject.toml` is empty, so there is no install metadata or console script configured yet.
-- `onionharvest/*.py` files are placeholders and do not currently implement behavior.
-
-If you want, I can next add a minimal working CLI (`onionharvest --help`) and proper `pyproject.toml` so it can be installed and used normally from WSL.
