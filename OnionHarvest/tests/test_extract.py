@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+import json
+
 from onionharvest import crawl
 from onionharvest.extract import extract_structured_fields
 
@@ -25,6 +29,59 @@ def test_extract_structured_fields_basic_html() -> None:
     assert "Hello from onionharvest." in (result["text_preview"] or "")
 
 
+def test_extract_structured_fields_prefers_first_meta_description() -> None:
+    html = """
+    <html>
+      <head>
+        <meta name="description" content="first description" />
+        <meta name="description" content="second description" />
+        <title>  Onion   Site  </title>
+      </head>
+      <body>
+        <a href="/1">one</a>
+      </body>
+    </html>
+    """
+
+    result = extract_structured_fields(html)
+
+    assert result == {
+        "title": "Onion   Site",
+        "description": "first description",
+        "links_count": 1,
+        "text_preview": "Onion   Site one",
+    }
+
+
+def test_extract_structured_fields_handles_empty_and_entities() -> None:
+    html = """
+    <html>
+      <head><title>AT&amp;T Onion</title></head>
+      <body>
+        <p>   </p>
+        <p>Tom &amp; Jerry</p>
+      </body>
+    </html>
+    """
+
+    result = extract_structured_fields(html)
+
+    assert result["description"] is None
+    assert result["links_count"] == 0
+    assert result["title"] == "AT&T Onion"
+    assert result["text_preview"] == "AT&T Onion Tom & Jerry"
+
+
+def test_extract_structured_fields_preview_capped_at_280_chars() -> None:
+    long_text = "x" * 400
+    html = f"<html><body><p>{long_text}</p></body></html>"
+
+    result = extract_structured_fields(html)
+
+    assert result["text_preview"] == long_text[:280]
+    assert len(result["text_preview"]) == 280
+
+
 def test_run_happy_path_pipeline_json(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(crawl, "bootstrap_tor", lambda: "tor://127.0.0.1:9050")
     monkeypatch.setattr(
@@ -41,3 +98,41 @@ def test_run_happy_path_pipeline_json(monkeypatch, tmp_path) -> None:
     payload = out.read_text(encoding="utf-8")
     assert "example.onion" in payload
     assert '"links_count": 1' in payload
+
+
+def test_pipeline_integration_calls_tor_and_fetch_boundaries(monkeypatch, tmp_path) -> None:
+    call_log: list[tuple[str, str | None]] = []
+
+    def fake_bootstrap_tor() -> str:
+        call_log.append(("bootstrap_tor", None))
+        return "tor://127.0.0.1:9050"
+
+    def fake_fetch_url_via_tor(url: str) -> str:
+        call_log.append(("fetch_url_via_tor", url))
+        return (
+            "<html><head><title>Hidden Service</title>"
+            "<meta name='description' content='mocked boundary'>"
+            "</head><body><a href='/x'>x</a><p>hello integration</p></body></html>"
+        )
+
+    monkeypatch.setattr(crawl, "bootstrap_tor", fake_bootstrap_tor)
+    monkeypatch.setattr(crawl, "fetch_url_via_tor", fake_fetch_url_via_tor)
+
+    out = tmp_path / "integration.json"
+    written = crawl.run_happy_path_pipeline("http://example.onion", out, "json")
+
+    assert written == out
+    assert call_log == [
+        ("bootstrap_tor", None),
+        ("fetch_url_via_tor", "http://example.onion"),
+    ]
+
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload == {
+        "url": "http://example.onion",
+        "fetched_via": "tor://127.0.0.1:9050",
+        "title": "Hidden Service",
+        "description": "mocked boundary",
+        "links_count": 1,
+        "text_preview": "Hidden Service x hello integration",
+    }
