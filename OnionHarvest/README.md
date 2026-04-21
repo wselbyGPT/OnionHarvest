@@ -7,11 +7,13 @@ Minimal "happy path" pipeline for v0.0.0:
 3. Extract structured fields from HTML (`title`, `description`, `links_count`, `text_preview`)
 4. Store one local artifact as JSON (default) or SQLite
 
-## Run
+## CLI
 
 ```bash
 cd /workspace/OnionHarvest/OnionHarvest
-python -m onionharvest.cli "http://example.onion" --out artifacts/harvest.json --format json
+python -m onionharvest.cli test-connection
+python -m onionharvest.cli fetch "http://example.onion"
+python -m onionharvest.cli run "http://example.onion" --out artifacts/harvest.json --format json
 ```
 
 If Tor is unavailable, the command returns a clear error message.
