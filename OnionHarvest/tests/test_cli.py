@@ -47,13 +47,13 @@ def test_main_run_batch_success(monkeypatch, tmp_path, capsys) -> None:
     )
     out_file = tmp_path / "harvest.db"
 
-    calls: list[tuple[str, str, str]] = []
+    calls: list[tuple[list[str], str]] = []
 
-    def fake_run(url: str, out: str, output_format: str):
-        calls.append((url, out, output_format))
+    def fake_run_batch(urls: list[str], out: str):
+        calls.append((urls, out))
         return out_file
 
-    monkeypatch.setattr(cli, "run_happy_path_pipeline", fake_run)
+    monkeypatch.setattr(cli, "run_batch_pipeline", fake_run_batch)
     monkeypatch.setattr(
         "sys.argv",
         ["onionharvest", "run-batch", "--input", str(urls_file), "--out", str(out_file)],
@@ -64,10 +64,7 @@ def test_main_run_batch_success(monkeypatch, tmp_path, capsys) -> None:
     out = capsys.readouterr().out
     assert code == 0
     assert "Processed 2 URL(s)" in out
-    assert calls == [
-        ("http://a.onion", str(out_file), "sqlite"),
-        ("http://b.onion", str(out_file), "sqlite"),
-    ]
+    assert calls == [(["http://a.onion", "http://b.onion"], str(out_file))]
 
 
 def test_main_run_batch_empty_input_file(monkeypatch, tmp_path, capsys) -> None:

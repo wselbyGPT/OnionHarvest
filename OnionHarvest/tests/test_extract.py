@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 
 from onionharvest import crawl
 from onionharvest.extract import extract_structured_fields
@@ -136,3 +137,29 @@ def test_pipeline_integration_calls_tor_and_fetch_boundaries(monkeypatch, tmp_pa
         "links_count": 1,
         "text_preview": "Hidden Service x hello integration",
     }
+
+
+def test_run_batch_pipeline_writes_each_url_as_sqlite_row(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(crawl, "bootstrap_tor", lambda: "tor://127.0.0.1:9050")
+    monkeypatch.setattr(
+        crawl,
+        "fetch_url_via_tor",
+        lambda url: (
+            f"<html><head><title>{url}</title></head>"
+            "<body><a href='/a'>a</a><a href='/b'>b</a></body></html>"
+        ),
+    )
+
+    out = tmp_path / "artifact.db"
+    written = crawl.run_batch_pipeline(["http://a.onion", "http://b.onion"], out)
+
+    assert written == out
+    with sqlite3.connect(out) as conn:
+        rows = conn.execute(
+            "SELECT url, fetched_via, links_count FROM harvest_records ORDER BY id"
+        ).fetchall()
+
+    assert rows == [
+        ("http://a.onion", "tor://127.0.0.1:9050", 2),
+        ("http://b.onion", "tor://127.0.0.1:9050", 2),
+    ]
