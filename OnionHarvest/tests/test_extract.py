@@ -158,8 +158,51 @@ def test_run_batch_pipeline_writes_each_url_as_sqlite_row(monkeypatch, tmp_path)
         rows = conn.execute(
             "SELECT url, fetched_via, links_count FROM harvest_records ORDER BY id"
         ).fetchall()
+        statuses = conn.execute(
+            "SELECT url, status FROM harvest_url_status ORDER BY url"
+        ).fetchall()
 
     assert rows == [
         ("http://a.onion", "tor://127.0.0.1:9050", 2),
         ("http://b.onion", "tor://127.0.0.1:9050", 2),
+    ]
+    assert statuses == [
+        ("http://a.onion", "success"),
+        ("http://b.onion", "success"),
+    ]
+
+
+def test_run_batch_pipeline_resume_skips_success_and_retries_errors(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(crawl, "bootstrap_tor", lambda: "tor://127.0.0.1:9050")
+    attempts: dict[str, int] = {"http://a.onion": 0, "http://b.onion": 0}
+
+    def fake_fetch(url: str) -> str:
+        attempts[url] += 1
+        if url == "http://b.onion" and attempts[url] == 1:
+            raise RuntimeError("transient failure")
+        return (
+            f"<html><head><title>{url}</title></head>"
+            "<body><a href='/a'>a</a></body></html>"
+        )
+
+    monkeypatch.setattr(crawl, "fetch_url_via_tor", fake_fetch)
+    out = tmp_path / "artifact.db"
+
+    crawl.run_batch_pipeline(["http://a.onion", "http://b.onion"], out)
+    crawl.run_batch_pipeline(["http://a.onion", "http://b.onion"], out)
+
+    assert attempts == {"http://a.onion": 1, "http://b.onion": 2}
+
+    with sqlite3.connect(out) as conn:
+        rows = conn.execute(
+            "SELECT url FROM harvest_records ORDER BY id"
+        ).fetchall()
+        statuses = conn.execute(
+            "SELECT url, status FROM harvest_url_status ORDER BY url"
+        ).fetchall()
+
+    assert rows == [("http://a.onion",), ("http://b.onion",)]
+    assert statuses == [
+        ("http://a.onion", "success"),
+        ("http://b.onion", "success"),
     ]

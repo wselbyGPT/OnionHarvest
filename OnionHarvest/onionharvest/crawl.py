@@ -5,7 +5,13 @@ from typing import Literal
 
 from .extract import extract_structured_fields
 from .fetch import fetch_url_via_tor
-from .store import store_json_record, store_sqlite_record
+from .store import (
+    get_urls_requiring_processing,
+    initialize_batch_status,
+    store_json_record,
+    store_sqlite_record,
+    update_url_status,
+)
 from .tor import bootstrap_tor
 
 
@@ -42,18 +48,21 @@ def run_batch_pipeline(
         raise PipelineError("Invalid input: URL list cannot be empty.")
 
     tor_endpoint = bootstrap_tor()
-    final_path: Path | None = None
+    final_path = initialize_batch_status(urls, output_path)
+    urls_to_process = get_urls_requiring_processing(urls, output_path)
 
-    for url in urls:
+    for url in urls_to_process:
         if not url.strip():
             raise PipelineError("Invalid input: URL cannot be empty.")
 
-        html = fetch_url_via_tor(url)
-        fields = extract_structured_fields(html)
-        record = {"url": url, "fetched_via": tor_endpoint, **fields}
-        final_path = store_sqlite_record(record, output_path)
-
-    if final_path is None:
-        raise PipelineError("Batch pipeline failed: no records were written.")
+        update_url_status(url, "pending", output_path)
+        try:
+            html = fetch_url_via_tor(url)
+            fields = extract_structured_fields(html)
+            record = {"url": url, "fetched_via": tor_endpoint, **fields}
+            final_path = store_sqlite_record(record, output_path)
+            update_url_status(url, "success", output_path)
+        except Exception as exc:
+            update_url_status(url, "error", output_path, str(exc))
 
     return final_path
