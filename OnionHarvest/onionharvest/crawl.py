@@ -41,6 +41,10 @@ def run_happy_path_pipeline(
     url: str,
     output_path: str | Path = "artifacts/harvest.json",
     output_format: Literal["json", "sqlite"] = "json",
+    fetch_max_retries: int = 2,
+    fetch_retry_backoff_base_sec: float = 0.25,
+    fetch_retry_backoff_max_sec: float = 2.0,
+    fetch_retry_jitter_sec: float = 0.1,
 ) -> Path:
     try:
         validated_url = validate_url(url)
@@ -48,7 +52,13 @@ def run_happy_path_pipeline(
         raise PipelineError(str(exc)) from exc
 
     tor_endpoint = bootstrap_tor()
-    html = fetch_url_via_tor(validated_url)
+    html = fetch_url_via_tor(
+        validated_url,
+        max_retries=fetch_max_retries,
+        retry_backoff_base_sec=fetch_retry_backoff_base_sec,
+        retry_backoff_max_sec=fetch_retry_backoff_max_sec,
+        retry_jitter_sec=fetch_retry_jitter_sec,
+    )
     fields = extract_structured_fields(html)
     record = {"url": validated_url, "fetched_via": tor_endpoint, **fields}
 
@@ -63,6 +73,10 @@ def run_happy_path_pipeline(
 def run_batch_pipeline(
     urls: list[str],
     output_path: str | Path = "artifacts/harvest.db",
+    fetch_max_retries: int = 2,
+    fetch_retry_backoff_base_sec: float = 0.25,
+    fetch_retry_backoff_max_sec: float = 2.0,
+    fetch_retry_jitter_sec: float = 0.1,
 ) -> BatchPipelineResult:
     if not urls:
         raise PipelineError("Invalid input: URL list cannot be empty.")
@@ -84,7 +98,13 @@ def run_batch_pipeline(
 
         update_url_status(validated_url, "pending", output_path)
         try:
-            html = fetch_url_via_tor(validated_url)
+            html = fetch_url_via_tor(
+                validated_url,
+                max_retries=fetch_max_retries,
+                retry_backoff_base_sec=fetch_retry_backoff_base_sec,
+                retry_backoff_max_sec=fetch_retry_backoff_max_sec,
+                retry_jitter_sec=fetch_retry_jitter_sec,
+            )
             fields = extract_structured_fields(html)
             record = {"url": validated_url, "fetched_via": tor_endpoint, **fields}
             final_path = store_sqlite_record(record, output_path)

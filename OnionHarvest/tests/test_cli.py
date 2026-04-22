@@ -17,7 +17,7 @@ def test_main_test_connection_success(monkeypatch, capsys) -> None:
 
 def test_main_fetch_success(monkeypatch, capsys) -> None:
     monkeypatch.setattr(cli, "bootstrap_tor", lambda: "tor://127.0.0.1:9050")
-    monkeypatch.setattr(cli, "fetch_url_via_tor", lambda _url: "<html>ok</html>")
+    monkeypatch.setattr(cli, "fetch_url_via_tor", lambda _url, **_kwargs: "<html>ok</html>")
     monkeypatch.setattr("sys.argv", ["onionharvest", "fetch", "http://example.onion"])
 
     code = cli.main()
@@ -29,7 +29,7 @@ def test_main_fetch_success(monkeypatch, capsys) -> None:
 
 def test_main_run_success(monkeypatch, tmp_path, capsys) -> None:
     out_file = tmp_path / "artifact.json"
-    monkeypatch.setattr(cli, "run_happy_path_pipeline", lambda _url, _out, _fmt: out_file)
+    monkeypatch.setattr(cli, "run_happy_path_pipeline", lambda _url, _out, _fmt, **_kwargs: out_file)
     monkeypatch.setattr(
         "sys.argv",
         ["onionharvest", "run", "http://example.onion", "--out", str(out_file), "--format", "json"],
@@ -52,7 +52,7 @@ def test_main_run_batch_success(monkeypatch, tmp_path, capsys) -> None:
 
     calls: list[tuple[list[str], str]] = []
 
-    def fake_run_batch(urls: list[str], out: str):
+    def fake_run_batch(urls: list[str], out: str, **_kwargs):
         calls.append((urls, out))
         return BatchPipelineResult(
             artifact_path=Path(out),
@@ -82,7 +82,7 @@ def test_main_run_batch_reports_errors_and_nonzero_exit(monkeypatch, tmp_path, c
     urls_file.write_text("http://a.onion\nhttp://b.onion\n", encoding="utf-8")
     out_file = tmp_path / "harvest.db"
 
-    def fake_run_batch(_urls: list[str], out: str) -> BatchPipelineResult:
+    def fake_run_batch(_urls: list[str], out: str, **_kwargs) -> BatchPipelineResult:
         return BatchPipelineResult(
             artifact_path=Path(out),
             total_urls=2,
@@ -132,3 +132,41 @@ def test_main_run_batch_invalid_url_in_input(monkeypatch, tmp_path, capsys) -> N
     assert code == 1
     assert "URL on line 2" in out
     assert "not a .onion domain" in out
+
+
+def test_main_fetch_threads_retry_flags(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(cli, "bootstrap_tor", lambda: "tor://127.0.0.1:9050")
+    captured: dict[str, object] = {}
+
+    def fake_fetch(_url: str, **kwargs):
+        captured.update(kwargs)
+        return "<html>ok</html>"
+
+    monkeypatch.setattr(cli, "fetch_url_via_tor", fake_fetch)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "onionharvest",
+            "fetch",
+            "http://example.onion",
+            "--fetch-max-retries",
+            "5",
+            "--fetch-retry-backoff-base-sec",
+            "0.5",
+            "--fetch-retry-backoff-max-sec",
+            "1.5",
+            "--fetch-retry-jitter-sec",
+            "0.2",
+        ],
+    )
+
+    code = cli.main()
+
+    assert code == 0
+    assert captured == {
+        "max_retries": 5,
+        "retry_backoff_base_sec": 0.5,
+        "retry_backoff_max_sec": 1.5,
+        "retry_jitter_sec": 0.2,
+    }
+    assert "<html>ok</html>" in capsys.readouterr().out

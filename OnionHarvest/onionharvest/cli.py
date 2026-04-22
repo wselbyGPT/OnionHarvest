@@ -15,6 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     fetch_parser = subparsers.add_parser("fetch", help="Fetch URL content through Tor and print it")
     fetch_parser.add_argument("url", help="Input URL to fetch through Tor")
+    _add_fetch_retry_arguments(fetch_parser)
 
     run_parser = subparsers.add_parser("run", help="Run the full happy-path pipeline")
     run_parser.add_argument("url", help="Input URL to fetch through Tor")
@@ -30,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="json",
         help="Output artifact format",
     )
+    _add_fetch_retry_arguments(run_parser)
 
     run_batch_parser = subparsers.add_parser(
         "run-batch",
@@ -45,10 +47,38 @@ def build_parser() -> argparse.ArgumentParser:
         default="artifacts/harvest.db",
         help="Output SQLite artifact path (default: artifacts/harvest.db)",
     )
+    _add_fetch_retry_arguments(run_batch_parser)
 
     subparsers.add_parser("test-connection", help="Validate local Tor SOCKS proxy connectivity")
 
     return parser
+
+
+def _add_fetch_retry_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--fetch-max-retries",
+        type=int,
+        default=2,
+        help="Number of retries for transient fetch failures (default: 2).",
+    )
+    parser.add_argument(
+        "--fetch-retry-backoff-base-sec",
+        type=float,
+        default=0.25,
+        help="Base exponential backoff delay in seconds (default: 0.25).",
+    )
+    parser.add_argument(
+        "--fetch-retry-backoff-max-sec",
+        type=float,
+        default=2.0,
+        help="Maximum backoff delay in seconds (default: 2.0).",
+    )
+    parser.add_argument(
+        "--fetch-retry-jitter-sec",
+        type=float,
+        default=0.1,
+        help="Maximum random jitter added to retries in seconds (default: 0.1).",
+    )
 
 
 def _load_batch_urls(input_path: str | Path) -> list[str]:
@@ -91,19 +121,40 @@ def main() -> int:
         if args.command == "fetch":
             bootstrap_tor()
             url = validate_url(args.url)
-            html = fetch_url_via_tor(url)
+            html = fetch_url_via_tor(
+                url,
+                max_retries=args.fetch_max_retries,
+                retry_backoff_base_sec=args.fetch_retry_backoff_base_sec,
+                retry_backoff_max_sec=args.fetch_retry_backoff_max_sec,
+                retry_jitter_sec=args.fetch_retry_jitter_sec,
+            )
             print(html)
             return 0
 
         if args.command == "run":
             url = validate_url(args.url)
-            artifact = run_happy_path_pipeline(url, args.out, args.output_format)
+            artifact = run_happy_path_pipeline(
+                url,
+                args.out,
+                args.output_format,
+                fetch_max_retries=args.fetch_max_retries,
+                fetch_retry_backoff_base_sec=args.fetch_retry_backoff_base_sec,
+                fetch_retry_backoff_max_sec=args.fetch_retry_backoff_max_sec,
+                fetch_retry_jitter_sec=args.fetch_retry_jitter_sec,
+            )
             print(f"Pipeline complete. Artifact written to: {artifact}")
             return 0
 
         if args.command == "run-batch":
             urls = _load_batch_urls(args.input)
-            result = run_batch_pipeline(urls, args.out)
+            result = run_batch_pipeline(
+                urls,
+                args.out,
+                fetch_max_retries=args.fetch_max_retries,
+                fetch_retry_backoff_base_sec=args.fetch_retry_backoff_base_sec,
+                fetch_retry_backoff_max_sec=args.fetch_retry_backoff_max_sec,
+                fetch_retry_jitter_sec=args.fetch_retry_jitter_sec,
+            )
             print(
                 "Batch pipeline complete. "
                 f"Processed {result.processed_count}/{result.total_urls} URL(s): "

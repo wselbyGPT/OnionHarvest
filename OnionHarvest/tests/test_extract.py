@@ -137,7 +137,7 @@ def test_run_happy_path_pipeline_json(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
         crawl,
         "fetch_url_via_tor",
-        lambda _url: "<html><head><title>T</title></head><body><a href='/'>x</a></body></html>",
+        lambda _url, **_kwargs: "<html><head><title>T</title></head><body><a href='/'>x</a></body></html>",
     )
 
     out = tmp_path / "artifact.json"
@@ -157,7 +157,7 @@ def test_pipeline_integration_calls_tor_and_fetch_boundaries(monkeypatch, tmp_pa
         call_log.append(("bootstrap_tor", None))
         return "tor://127.0.0.1:9050"
 
-    def fake_fetch_url_via_tor(url: str) -> str:
+    def fake_fetch_url_via_tor(url: str, **_kwargs) -> str:
         call_log.append(("fetch_url_via_tor", url))
         return (
             "<html><head><title>Hidden Service</title>"
@@ -193,7 +193,7 @@ def test_run_batch_pipeline_writes_each_url_as_sqlite_row(monkeypatch, tmp_path)
     monkeypatch.setattr(
         crawl,
         "fetch_url_via_tor",
-        lambda url: (
+        lambda url, **_kwargs: (
             f"<html><head><title>{url}</title></head>"
             "<body><a href='/a'>a</a><a href='/b'>b</a></body></html>"
         ),
@@ -230,7 +230,7 @@ def test_run_batch_pipeline_resume_skips_success_and_retries_errors(monkeypatch,
     monkeypatch.setattr(crawl, "bootstrap_tor", lambda: "tor://127.0.0.1:9050")
     attempts: dict[str, int] = {"http://a.onion": 0, "http://b.onion": 0}
 
-    def fake_fetch(url: str) -> str:
+    def fake_fetch(url: str, **_kwargs) -> str:
         attempts[url] += 1
         if url == "http://b.onion" and attempts[url] == 1:
             raise RuntimeError("transient failure")
@@ -265,7 +265,7 @@ def test_run_batch_pipeline_resume_skips_success_and_retries_errors(monkeypatch,
 def test_run_batch_pipeline_retains_error_messages_per_url(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(crawl, "bootstrap_tor", lambda: "tor://127.0.0.1:9050")
 
-    def fake_fetch(url: str) -> str:
+    def fake_fetch(url: str, **_kwargs) -> str:
         if url == "http://bad.onion":
             raise RuntimeError("connection reset")
         return "<html><head><title>ok</title></head><body></body></html>"

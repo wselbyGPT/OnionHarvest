@@ -41,6 +41,15 @@ Fetch raw HTML via Tor:
 onionharvest fetch "http://example.onion"
 ```
 
+Tune retry behavior for transient Tor/network failures:
+```bash
+onionharvest fetch "http://example.onion" \
+  --fetch-max-retries 4 \
+  --fetch-retry-backoff-base-sec 0.3 \
+  --fetch-retry-backoff-max-sec 2.0 \
+  --fetch-retry-jitter-sec 0.1
+```
+
 Write to SQLite instead of JSON:
 ```bash
 onionharvest run "http://example.onion" --out artifacts/harvest.db --format sqlite
@@ -50,6 +59,12 @@ Run a batch of URLs from a text file into one SQLite artifact:
 ```bash
 onionharvest run-batch --input urls.txt --out artifacts/harvest.db
 ```
+
+Retry-related flags are also available on `run` and `run-batch`, with safe defaults:
+- `--fetch-max-retries` (default `2`)
+- `--fetch-retry-backoff-base-sec` (default `0.25`)
+- `--fetch-retry-backoff-max-sec` (default `2.0`)
+- `--fetch-retry-jitter-sec` (default `0.1`)
 
 ## Legal / Ethical Usage Note
 
@@ -116,7 +131,7 @@ What to do:
 1. Retry the command (Tor circuits can be slow/variable).
 2. Confirm the target URL is currently reachable.
 3. Check local network/firewall restrictions that may block Tor traffic.
-4. If needed, update code to increase fetch timeout (default is 20 seconds in `fetch_url_via_tor`).
+4. If needed, increase retries/backoff using the `--fetch-*` flags above.
 
 ### Bad or unexpected HTML extraction
 Symptom:
