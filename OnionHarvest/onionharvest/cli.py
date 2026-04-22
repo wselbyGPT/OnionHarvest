@@ -86,9 +86,18 @@ def main() -> int:
 
         if args.command == "run-batch":
             urls = _load_batch_urls(args.input)
-            artifact = run_batch_pipeline(urls, args.out)
-            print(f"Batch pipeline complete. Processed {len(urls)} URL(s). Artifact written to: {artifact}")
-            return 0
+            result = run_batch_pipeline(urls, args.out)
+            print(
+                "Batch pipeline complete. "
+                f"Processed {result.processed_count}/{result.total_urls} URL(s): "
+                f"{result.success_count} succeeded, {result.error_count} failed. "
+                f"Artifact written to: {result.artifact_path}"
+            )
+            if result.failed:
+                print("Failed URLs:")
+                for error in result.failed:
+                    print(f"- {error.url}: {error.message}")
+            return 1 if result.error_count else 0
 
     except (PipelineError, RuntimeError, FetchError, TorBootstrapError) as exc:
         print(f"ERROR: {exc}")
