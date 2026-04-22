@@ -32,3 +32,28 @@ def run_happy_path_pipeline(
         return store_sqlite_record(record, output_path)
 
     raise PipelineError(f"Invalid output format: '{output_format}'. Use 'json' or 'sqlite'.")
+
+
+def run_batch_pipeline(
+    urls: list[str],
+    output_path: str | Path = "artifacts/harvest.db",
+) -> Path:
+    if not urls:
+        raise PipelineError("Invalid input: URL list cannot be empty.")
+
+    tor_endpoint = bootstrap_tor()
+    final_path: Path | None = None
+
+    for url in urls:
+        if not url.strip():
+            raise PipelineError("Invalid input: URL cannot be empty.")
+
+        html = fetch_url_via_tor(url)
+        fields = extract_structured_fields(html)
+        record = {"url": url, "fetched_via": tor_endpoint, **fields}
+        final_path = store_sqlite_record(record, output_path)
+
+    if final_path is None:
+        raise PipelineError("Batch pipeline failed: no records were written.")
+
+    return final_path

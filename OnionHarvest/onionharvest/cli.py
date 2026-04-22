@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .crawl import PipelineError, run_happy_path_pipeline
+from .crawl import PipelineError, run_batch_pipeline, run_happy_path_pipeline
 from .fetch import FetchError, fetch_url_via_tor
 from .tor import TorBootstrapError, bootstrap_tor
 
@@ -86,9 +86,8 @@ def main() -> int:
 
         if args.command == "run-batch":
             urls = _load_batch_urls(args.input)
-            for url in urls:
-                run_happy_path_pipeline(url, args.out, "sqlite")
-            print(f"Batch pipeline complete. Processed {len(urls)} URL(s). Artifact written to: {args.out}")
+            artifact = run_batch_pipeline(urls, args.out)
+            print(f"Batch pipeline complete. Processed {len(urls)} URL(s). Artifact written to: {artifact}")
             return 0
 
     except (PipelineError, RuntimeError, FetchError, TorBootstrapError) as exc:
