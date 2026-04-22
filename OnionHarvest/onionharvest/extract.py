@@ -9,26 +9,35 @@ class _FieldParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self._in_title = False
+        self._non_visible_depth = 0
         self.title_parts: list[str] = []
         self.description: str | None = None
         self.links_count = 0
         self.visible_text_parts: list[str] = []
 
+    _NON_VISIBLE_TAGS = {"script", "style", "noscript", "template", "head"}
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
         attr_map = {k.lower(): (v or "") for k, v in attrs}
-        if tag.lower() == "title":
+        if tag in self._NON_VISIBLE_TAGS:
+            self._non_visible_depth += 1
+        if tag == "title":
             self._in_title = True
-        elif tag.lower() == "meta":
+        elif tag == "meta":
             if attr_map.get("name", "").lower() == "description" and not self.description:
                 content = attr_map.get("content", "").strip()
                 if content:
                     self.description = content
-        elif tag.lower() == "a":
+        elif tag == "a":
             self.links_count += 1
 
     def handle_endtag(self, tag: str) -> None:
-        if tag.lower() == "title":
+        tag = tag.lower()
+        if tag == "title":
             self._in_title = False
+        if tag in self._NON_VISIBLE_TAGS and self._non_visible_depth > 0:
+            self._non_visible_depth -= 1
 
     def handle_data(self, data: str) -> None:
         text = data.strip()
@@ -36,6 +45,10 @@ class _FieldParser(HTMLParser):
             return
         if self._in_title:
             self.title_parts.append(text)
+            self.visible_text_parts.append(text)
+            return
+        if self._non_visible_depth > 0:
+            return
         self.visible_text_parts.append(text)
 
 

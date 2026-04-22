@@ -73,6 +73,55 @@ def test_extract_structured_fields_handles_empty_and_entities() -> None:
     assert result["text_preview"] == "AT&T Onion Tom & Jerry"
 
 
+
+
+def test_extract_structured_fields_excludes_non_visible_tag_content() -> None:
+    html = """
+    <html>
+      <head>
+        <title>Readable Title</title>
+        <script>var hidden = "head script";</script>
+        <style>.hidden { display: none; }</style>
+      </head>
+      <body>
+        <noscript>This should not appear</noscript>
+        <template>Template text should not appear</template>
+        <script>console.log("body script")</script>
+        <style>body { color: red; }</style>
+        <p>Visible body content.</p>
+      </body>
+    </html>
+    """
+
+    result = extract_structured_fields(html)
+
+    assert result["title"] == "Readable Title"
+    assert result["text_preview"] == "Readable Title Visible body content."
+
+
+def test_extract_structured_fields_keeps_title_and_visible_body_text() -> None:
+    html = """
+    <html>
+      <head>
+        <title>Market Updates</title>
+        <meta name="description" content="Daily digest" />
+      </head>
+      <body>
+        <p>Morning bulletin</p>
+        <p>Evening bulletin</p>
+      </body>
+    </html>
+    """
+
+    result = extract_structured_fields(html)
+
+    assert result == {
+        "title": "Market Updates",
+        "description": "Daily digest",
+        "links_count": 0,
+        "text_preview": "Market Updates Morning bulletin Evening bulletin",
+    }
+
 def test_extract_structured_fields_preview_capped_at_280_chars() -> None:
     long_text = "x" * 400
     html = f"<html><body><p>{long_text}</p></body></html>"
