@@ -14,12 +14,12 @@ OnionHarvest is a minimal, explicit "happy-path" pipeline for fetching one URL v
 cd /workspace/OnionHarvest/OnionHarvest
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ### 3) Verify Tor connectivity
 ```bash
-python -m onionharvest.cli test-connection
+onionharvest test-connection
 ```
 Expected success message:
 ```text
@@ -28,7 +28,7 @@ Connection OK: tor://127.0.0.1:9050
 
 ### 4) Run the pipeline
 ```bash
-python -m onionharvest.cli run "http://example.onion" --out artifacts/harvest.json --format json
+onionharvest run "http://example.onion" --out artifacts/harvest.json --format json
 ```
 Expected success message:
 ```text
@@ -38,17 +38,17 @@ Pipeline complete. Artifact written to: artifacts/harvest.json
 ### 5) Optional commands
 Fetch raw HTML via Tor:
 ```bash
-python -m onionharvest.cli fetch "http://example.onion"
+onionharvest fetch "http://example.onion"
 ```
 
 Write to SQLite instead of JSON:
 ```bash
-python -m onionharvest.cli run "http://example.onion" --out artifacts/harvest.db --format sqlite
+onionharvest run "http://example.onion" --out artifacts/harvest.db --format sqlite
 ```
 
 Run a batch of URLs from a text file into one SQLite artifact:
 ```bash
-python -m onionharvest.cli run-batch --input urls.txt --out artifacts/harvest.db
+onionharvest run-batch --input urls.txt --out artifacts/harvest.db
 ```
 
 ## Legal / Ethical Usage Note
@@ -62,7 +62,7 @@ Use OnionHarvest only for lawful, authorized, and ethically justified activities
 
 ## Expected Output Format
 
-When you run `onionharvest.cli run`, OnionHarvest creates a single record with these fields:
+When you run `onionharvest run`, OnionHarvest creates a single record with these fields:
 
 - `url` (string): input URL
 - `fetched_via` (string): Tor endpoint used (for example `tor://127.0.0.1:9050`)
@@ -105,7 +105,7 @@ ERROR: Tor bootstrap failed: unable to connect to SOCKS proxy at 127.0.0.1:9050.
 What to do:
 1. Start Tor on your machine (`tor` service or Tor daemon).
 2. Confirm something is listening on `127.0.0.1:9050`.
-3. Re-run `python -m onionharvest.cli test-connection`.
+3. Re-run `onionharvest test-connection`.
 
 ### Timeouts during fetch
 Symptom:

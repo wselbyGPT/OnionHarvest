@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "onionharvest"
+version = "0.0.0"
+description = "A minimal happy-path pipeline for fetching and extracting .onion web data via Tor."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0",
+]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+onionharvest = "onionharvest.cli:main"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["onionharvest*"]
