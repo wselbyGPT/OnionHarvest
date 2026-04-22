@@ -37,3 +37,47 @@ def test_main_run_success(monkeypatch, tmp_path, capsys) -> None:
     out = capsys.readouterr().out
     assert code == 0
     assert str(out_file) in out
+
+
+def test_main_run_batch_success(monkeypatch, tmp_path, capsys) -> None:
+    urls_file = tmp_path / "urls.txt"
+    urls_file.write_text(
+        "http://a.onion\n\n# comment\nhttp://b.onion\n",
+        encoding="utf-8",
+    )
+    out_file = tmp_path / "harvest.db"
+
+    calls: list[tuple[str, str, str]] = []
+
+    def fake_run(url: str, out: str, output_format: str):
+        calls.append((url, out, output_format))
+        return out_file
+
+    monkeypatch.setattr(cli, "run_happy_path_pipeline", fake_run)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["onionharvest", "run-batch", "--input", str(urls_file), "--out", str(out_file)],
+    )
+
+    code = cli.main()
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Processed 2 URL(s)" in out
+    assert calls == [
+        ("http://a.onion", str(out_file), "sqlite"),
+        ("http://b.onion", str(out_file), "sqlite"),
+    ]
+
+
+def test_main_run_batch_empty_input_file(monkeypatch, tmp_path, capsys) -> None:
+    urls_file = tmp_path / "urls.txt"
+    urls_file.write_text("\n# no entries\n", encoding="utf-8")
+
+    monkeypatch.setattr("sys.argv", ["onionharvest", "run-batch", "--input", str(urls_file)])
+
+    code = cli.main()
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "did not contain any URLs" in out

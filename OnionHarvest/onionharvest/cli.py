@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
 from .crawl import PipelineError, run_happy_path_pipeline
 from .fetch import FetchError, fetch_url_via_tor
@@ -29,9 +30,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output artifact format",
     )
 
+    run_batch_parser = subparsers.add_parser(
+        "run-batch",
+        help="Run the happy-path pipeline for each URL listed in an input file",
+    )
+    run_batch_parser.add_argument(
+        "--input",
+        required=True,
+        help="Path to a text file containing one URL per line",
+    )
+    run_batch_parser.add_argument(
+        "--out",
+        default="artifacts/harvest.db",
+        help="Output SQLite artifact path (default: artifacts/harvest.db)",
+    )
+
     subparsers.add_parser("test-connection", help="Validate local Tor SOCKS proxy connectivity")
 
     return parser
+
+
+def _load_batch_urls(input_path: str | Path) -> list[str]:
+    path = Path(input_path)
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise PipelineError(f"Invalid input: unable to read URL list file '{path}'.") from exc
+
+    urls = [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
+    if not urls:
+        raise PipelineError(f"Invalid input: URL list file '{path}' did not contain any URLs.")
+    return urls
 
 
 def main() -> int:
@@ -53,6 +82,13 @@ def main() -> int:
         if args.command == "run":
             artifact = run_happy_path_pipeline(args.url, args.out, args.output_format)
             print(f"Pipeline complete. Artifact written to: {artifact}")
+            return 0
+
+        if args.command == "run-batch":
+            urls = _load_batch_urls(args.input)
+            for url in urls:
+                run_happy_path_pipeline(url, args.out, "sqlite")
+            print(f"Batch pipeline complete. Processed {len(urls)} URL(s). Artifact written to: {args.out}")
             return 0
 
     except (PipelineError, RuntimeError, FetchError, TorBootstrapError) as exc:
