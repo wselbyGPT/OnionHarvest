@@ -151,9 +151,14 @@ def test_run_batch_pipeline_writes_each_url_as_sqlite_row(monkeypatch, tmp_path)
     )
 
     out = tmp_path / "artifact.db"
-    written = crawl.run_batch_pipeline(["http://a.onion", "http://b.onion"], out)
+    result = crawl.run_batch_pipeline(["http://a.onion", "http://b.onion"], out)
 
-    assert written == out
+    assert result.artifact_path == out
+    assert result.total_urls == 2
+    assert result.processed_count == 2
+    assert result.success_count == 2
+    assert result.error_count == 0
+    assert result.failed == ()
     with sqlite3.connect(out) as conn:
         rows = conn.execute(
             "SELECT url, fetched_via, links_count FROM harvest_records ORDER BY id"
@@ -205,4 +210,36 @@ def test_run_batch_pipeline_resume_skips_success_and_retries_errors(monkeypatch,
     assert statuses == [
         ("http://a.onion", "success"),
         ("http://b.onion", "success"),
+    ]
+
+
+def test_run_batch_pipeline_retains_error_messages_per_url(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(crawl, "bootstrap_tor", lambda: "tor://127.0.0.1:9050")
+
+    def fake_fetch(url: str) -> str:
+        if url == "http://bad.onion":
+            raise RuntimeError("connection reset")
+        return "<html><head><title>ok</title></head><body></body></html>"
+
+    monkeypatch.setattr(crawl, "fetch_url_via_tor", fake_fetch)
+    out = tmp_path / "artifact.db"
+
+    result = crawl.run_batch_pipeline(["http://ok.onion", "http://bad.onion"], out)
+
+    assert result.total_urls == 2
+    assert result.processed_count == 2
+    assert result.success_count == 1
+    assert result.error_count == 1
+    assert result.failed == (
+        crawl.BatchPipelineErrorDetail(url="http://bad.onion", message="connection reset"),
+    )
+
+    with sqlite3.connect(out) as conn:
+        statuses = conn.execute(
+            "SELECT url, status, error_message FROM harvest_url_status ORDER BY url"
+        ).fetchall()
+
+    assert statuses == [
+        ("http://bad.onion", "error", "connection reset"),
+        ("http://ok.onion", "success", None),
     ]

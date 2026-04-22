@@ -12,4 +12,5 @@ onionharvest.egg-info/PKG-INFO
 onionharvest.egg-info/SOURCES.txt
 onionharvest.egg-info/dependency_links.txt
 onionharvest.egg-info/top_level.txt
+tests/test_cli.py
 tests/test_extract.py
