@@ -118,3 +118,17 @@ def test_main_run_batch_empty_input_file(monkeypatch, tmp_path, capsys) -> None:
     out = capsys.readouterr().out
     assert code == 1
     assert "did not contain any URLs" in out
+
+
+def test_main_run_batch_invalid_url_in_input(monkeypatch, tmp_path, capsys) -> None:
+    urls_file = tmp_path / "urls.txt"
+    urls_file.write_text("http://good.onion\nhttp://not-onion.example\n", encoding="utf-8")
+
+    monkeypatch.setattr("sys.argv", ["onionharvest", "run-batch", "--input", str(urls_file)])
+
+    code = cli.main()
+
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "URL on line 2" in out
+    assert "not a .onion domain" in out

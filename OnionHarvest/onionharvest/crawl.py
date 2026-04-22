@@ -14,6 +14,7 @@ from .store import (
     update_url_status,
 )
 from .tor import bootstrap_tor
+from .validation import URLValidationError, validate_url
 
 
 class PipelineError(RuntimeError):
@@ -41,13 +42,15 @@ def run_happy_path_pipeline(
     output_path: str | Path = "artifacts/harvest.json",
     output_format: Literal["json", "sqlite"] = "json",
 ) -> Path:
-    if not url.strip():
-        raise PipelineError("Invalid input: URL cannot be empty.")
+    try:
+        validated_url = validate_url(url)
+    except URLValidationError as exc:
+        raise PipelineError(str(exc)) from exc
 
     tor_endpoint = bootstrap_tor()
-    html = fetch_url_via_tor(url)
+    html = fetch_url_via_tor(validated_url)
     fields = extract_structured_fields(html)
-    record = {"url": url, "fetched_via": tor_endpoint, **fields}
+    record = {"url": validated_url, "fetched_via": tor_endpoint, **fields}
 
     if output_format == "json":
         return store_json_record(record, output_path)
@@ -71,16 +74,21 @@ def run_batch_pipeline(
     failed: list[BatchPipelineErrorDetail] = []
 
     for url in urls_to_process:
-        if not url.strip():
-            raise PipelineError("Invalid input: URL cannot be empty.")
-
-        update_url_status(url, "pending", output_path)
         try:
-            html = fetch_url_via_tor(url)
+            validated_url = validate_url(url)
+        except URLValidationError as exc:
+            message = str(exc)
+            update_url_status(url, "error", output_path, message)
+            failed.append(BatchPipelineErrorDetail(url=url, message=message))
+            continue
+
+        update_url_status(validated_url, "pending", output_path)
+        try:
+            html = fetch_url_via_tor(validated_url)
             fields = extract_structured_fields(html)
-            record = {"url": url, "fetched_via": tor_endpoint, **fields}
+            record = {"url": validated_url, "fetched_via": tor_endpoint, **fields}
             final_path = store_sqlite_record(record, output_path)
-            update_url_status(url, "success", output_path)
+            update_url_status(validated_url, "success", output_path)
             success_count += 1
         except Exception as exc:
             message = str(exc)

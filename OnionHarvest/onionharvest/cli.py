@@ -6,6 +6,7 @@ from pathlib import Path
 from .crawl import PipelineError, run_batch_pipeline, run_happy_path_pipeline
 from .fetch import FetchError, fetch_url_via_tor
 from .tor import TorBootstrapError, bootstrap_tor
+from .validation import URLValidationError, validate_url
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -57,10 +58,24 @@ def _load_batch_urls(input_path: str | Path) -> list[str]:
     except OSError as exc:
         raise PipelineError(f"Invalid input: unable to read URL list file '{path}'.") from exc
 
-    urls = [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
-    if not urls:
+    indexed_urls = [
+        (line_number, line.strip())
+        for line_number, line in enumerate(lines, start=1)
+        if line.strip() and not line.strip().startswith("#")
+    ]
+    if not indexed_urls:
         raise PipelineError(f"Invalid input: URL list file '{path}' did not contain any URLs.")
-    return urls
+
+    validated_urls: list[str] = []
+    for line_number, candidate in indexed_urls:
+        try:
+            validated_urls.append(validate_url(candidate))
+        except URLValidationError as exc:
+            raise PipelineError(
+                f"Invalid input: URL on line {line_number} in '{path}' is invalid. {exc}"
+            ) from exc
+
+    return validated_urls
 
 
 def main() -> int:
@@ -75,12 +90,14 @@ def main() -> int:
 
         if args.command == "fetch":
             bootstrap_tor()
-            html = fetch_url_via_tor(args.url)
+            url = validate_url(args.url)
+            html = fetch_url_via_tor(url)
             print(html)
             return 0
 
         if args.command == "run":
-            artifact = run_happy_path_pipeline(args.url, args.out, args.output_format)
+            url = validate_url(args.url)
+            artifact = run_happy_path_pipeline(url, args.out, args.output_format)
             print(f"Pipeline complete. Artifact written to: {artifact}")
             return 0
 
@@ -99,7 +116,7 @@ def main() -> int:
                     print(f"- {error.url}: {error.message}")
             return 1 if result.error_count else 0
 
-    except (PipelineError, RuntimeError, FetchError, TorBootstrapError) as exc:
+    except (PipelineError, RuntimeError, FetchError, TorBootstrapError, URLValidationError) as exc:
         print(f"ERROR: {exc}")
         return 1
 
