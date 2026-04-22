@@ -46,6 +46,11 @@ Write to SQLite instead of JSON:
 python -m onionharvest.cli run "http://example.onion" --out artifacts/harvest.db --format sqlite
 ```
 
+Run a batch of URLs from a text file into one SQLite artifact:
+```bash
+python -m onionharvest.cli run-batch --input urls.txt --out artifacts/harvest.db
+```
+
 ## Legal / Ethical Usage Note
 
 Use OnionHarvest only for lawful, authorized, and ethically justified activities.
